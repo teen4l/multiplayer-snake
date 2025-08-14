@@ -27,7 +27,8 @@ def init_hotkeys() -> None:
             hotkeys_list.append(hotkeys.hk(
                 str(direction), key,
                 ignore_repeat=False,
-                help=f'Move {direction.name.lower()}'
+                help=f'Move {direction.name.lower()}',
+                prevent_default=True
             ))
 
     hotkeys.activate(hotkeys_list, key='game-hotkeys')
