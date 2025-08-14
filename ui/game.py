@@ -1,3 +1,5 @@
+import base64
+import io
 import os
 import random
 import tempfile
@@ -33,13 +35,28 @@ def init_hotkeys() -> None:
     hotkeys.activate(hotkeys_list, key='game-hotkeys')
 
 
+def show_frame(container, frame_np, width=None):
+    # ensure proper dtype
+    if frame_np.dtype != np.uint8:
+        frame_np = np.clip(frame_np, 0, 255).astype(np.uint8)
+    # encode PNG -> base64
+    buf = io.BytesIO()
+    Image.fromarray(frame_np).save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    style = f' style="width:{width}px;"' if width else ""
+    container.markdown(
+        f'<img src="data:image/png;base64,{b64}"{style}>',
+        unsafe_allow_html=True,
+    )
+
+
 class GameUI:
 
     def __init__(self):
         if 'session' not in st.session_state:
             st.session_state.session = 'menu'
         if 'frame_scale' not in st.session_state:
-            st.session_state.frame_scale = 5
+            st.session_state.frame_scale = 6
 
         self.placeholders_ready = False
 
@@ -82,14 +99,7 @@ class GameUI:
         frame = np.repeat(LAST_FRAME, frame_scale, axis=0)
         frame = np.repeat(frame, frame_scale, axis=1)
 
-        tmp_dir = tempfile.gettempdir()
-        frame_path = os.path.join(tmp_dir, 'game_frame.png')
-        staging_path = frame_path + ".tmp"
-
-        Image.fromarray(frame).save(staging_path, format='PNG')
-        os.replace(staging_path, frame_path)
-
-        self.game_screen.image(frame_path)
+        show_frame(self.game_screen, frame)
 
     @classmethod
     def init(cls):

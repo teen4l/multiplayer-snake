@@ -70,7 +70,7 @@ class ControlsUI:
             st.session_state.color_warnings = set()
 
         if 'frame_scale' not in st.session_state:
-            st.session_state.frame_scale = 5
+            st.session_state.frame_scale = 6
 
         self.placeholders_ready = False
 

@@ -24,6 +24,8 @@ with expander_ph.expander('How to play?'):
     hotkeys.legend(key='controls')
     st.markdown('Use the following keys to control the snake:')
     hotkeys.legend(key='game-hotkeys')
+    st.markdown('**Recommended**: expand the game screen (hover the top-right corner of the game screen for the button '
+                'to appear), press `R` to start playing!')
 
 controls_ui.render()
 game_ui.render()
