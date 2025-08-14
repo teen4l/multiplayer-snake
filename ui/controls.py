@@ -1,7 +1,7 @@
 import streamlit as st
 import streamlit_hotkeys as hotkeys
 
-from state import new_snake, submit_snake, remove_snake, is_snake_alive
+from state import new_snake, submit_snake, remove_snake
 from utils.color import random_valid_hex, hex_to_rgb, validate_color
 
 
