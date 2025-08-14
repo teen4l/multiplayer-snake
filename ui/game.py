@@ -1,8 +1,11 @@
+import os
 import random
+import tempfile
 
 import numpy as np
 import streamlit as st
 import streamlit_hotkeys as hotkeys
+from PIL import Image
 
 from state import TICK_RATE, Direction, submit_move
 
@@ -78,7 +81,15 @@ class GameUI:
         frame_scale = st.session_state.frame_scale
         frame = np.repeat(LAST_FRAME, frame_scale, axis=0)
         frame = np.repeat(frame, frame_scale, axis=1)
-        self.game_screen.image(frame, output_format='PNG')
+
+        tmp_dir = tempfile.gettempdir()
+        frame_path = os.path.join(tmp_dir, 'game_frame.png')
+        staging_path = frame_path + ".tmp"
+
+        Image.fromarray(frame).save(staging_path, format='PNG')
+        os.replace(staging_path, frame_path)
+
+        self.game_screen.image(frame_path)
 
     @classmethod
     def init(cls):
