@@ -1,8 +1,10 @@
+import queue
 import random
 import threading
 from collections import deque, defaultdict
 from copy import deepcopy
-from enum import StrEnum
+from dataclasses import dataclass
+from enum import StrEnum, auto, Enum
 from itertools import cycle
 from time import time, sleep
 from typing import Iterable, Iterator
@@ -367,7 +369,7 @@ def resolve_collisions():
 
         for removed_snake in remove_snakes:
             _, id_ = removed_snake
-            remove_snake(id_)
+            _apply_remove_snake(id_)
 
         return ids
 
@@ -434,33 +436,83 @@ def new_snake(colors: Iterable[tuple[int, int, int]]) -> Snake | None:
 
     return None  # failed to find a valid position
 
-@state_lock
-def is_snake_alive(snake_id: str) -> bool:
-    return snake_id in ACTIVE_SNAKES
+# ---------------- Job plumbing ----------------
+class JobType(Enum):
+    SUBMIT_SNAKE = auto()
+    REMOVE_SNAKE = auto()
+    SUBMIT_MOVE = auto()
 
+@dataclass
+class Job:
+    kind: JobType
+    snake_id: str | None = None
+    snake: Snake | None = None
+    direction: Direction | None = None
+
+_JOBS: queue.Queue[Job] = queue.Queue(maxsize=10000)
+_WORKER: threading.Thread | None = None
+_WORKER_STARTED = threading.Event()
+
+def _ensure_worker():
+    global _WORKER
+    if _WORKER and _WORKER.is_alive():
+        return
+    def _worker():
+        while True:
+            job = _JOBS.get()
+            try:
+                if job.kind is JobType.SUBMIT_SNAKE:
+                    _apply_submit_snake(job.snake_id, job.snake)
+                elif job.kind is JobType.REMOVE_SNAKE:
+                    _apply_remove_snake(job.snake_id)
+                elif job.kind is JobType.SUBMIT_MOVE:
+                    _apply_submit_move(job.snake_id, job.direction)
+            except Exception as e:
+                print(f'Job failed: {job}, {e}')
+            finally:
+                _JOBS.task_done()
+
+    _WORKER = threading.Thread(target=_worker, name="state-worker", daemon=True)
+    _WORKER.start()
+    _WORKER_STARTED.set()
+
+# ---------------- State mutations (locked) ----------------
 @state_lock
-def submit_snake(snake: Snake) -> str:
-    snake_id = _generate_id(EntityType.SNAKE)
+def _apply_submit_snake(snake_id: str, snake: "Snake") -> None:
     ACTIVE_SNAKES[snake_id] = snake
     SNAKE_MOVES[snake_id] = snake.snake_direction
-    return snake_id
 
 @state_lock
-def remove_snake(snake_id: str) -> None:
+def _apply_remove_snake(snake_id: str) -> None:
     if snake_id in ACTIVE_SNAKES:
         new_food = ACTIVE_SNAKES[snake_id].die()
         add_food(new_food=new_food)
-
-        ACTIVE_SNAKES.pop(snake_id)
-
-    if snake_id in SNAKE_MOVES:
-        SNAKE_MOVES.pop(snake_id)
+        ACTIVE_SNAKES.pop(snake_id, None)
+    SNAKE_MOVES.pop(snake_id, None)
 
 @state_lock
-def submit_move(snake_id: str, direction: Direction) -> None:
-    if snake_id not in ACTIVE_SNAKES:
-        return
-    SNAKE_MOVES[snake_id] = direction
+def _apply_submit_move(snake_id: str, direction: "Direction") -> None:
+    if snake_id in ACTIVE_SNAKES:
+        SNAKE_MOVES[snake_id] = direction
+
+# ---------------- Public async API (non-blocking) ----------------
+def submit_snake(snake: "Snake") -> str:
+    """Return ID immediately; worker will add snake soon after."""
+    _ensure_worker()
+    snake_id = _generate_id(EntityType.SNAKE)
+    _JOBS.put_nowait(Job(kind=JobType.SUBMIT_SNAKE, snake_id=snake_id, snake=snake))
+    return snake_id
+
+def remove_snake(snake_id: str) -> None:
+    _ensure_worker()
+    _JOBS.put_nowait(Job(kind=JobType.REMOVE_SNAKE, snake_id=snake_id))
+
+def submit_move(snake_id: str, direction: "Direction") -> None:
+    _ensure_worker()
+    _JOBS.put_nowait(Job(kind=JobType.SUBMIT_MOVE, snake_id=snake_id, direction=direction))
+
+def is_snake_alive(snake_id: str) -> bool:
+    return snake_id in ACTIVE_SNAKES
 
 @state_lock
 def move_snakes():

@@ -1,10 +1,8 @@
 import streamlit as st
 import streamlit_hotkeys as hotkeys
 
-from state import new_snake, submit_snake, remove_snake, TICK_RATE, is_snake_alive
+from state import new_snake, submit_snake, remove_snake, is_snake_alive
 from utils.color import random_valid_hex, hex_to_rgb, validate_color
-
-from utils.func import call_all
 
 
 MAX_SEGMENTS = 12
@@ -21,10 +19,6 @@ def validate_selection(color_idx: int):
         st.session_state.color_warnings.add(color_idx)
 
 
-def set_session(session: str, *_, **__):
-    st.session_state.session = session
-
-
 def create_snake(*_, **__):
     rgb_colors = []
     for segment_idx in range(st.session_state.snake_segments):
@@ -35,6 +29,7 @@ def create_snake(*_, **__):
         return
 
     st.session_state.snake = submit_snake(snake)
+    st.session_state.session = 'playing'
 
 
 def kill_snake(*_, **__):
@@ -48,7 +43,6 @@ def kill_snake(*_, **__):
 def restart_game(*_, **__):
     kill_snake()
     create_snake()
-    st.session_state.session = 'playing'
 
 
 @st.fragment
@@ -101,9 +95,6 @@ class ControlsUI:
         self.color_instructions.caption('Pick the color for your snake')
         snake_colors: list[str] = []
 
-        if 'snake' in st.session_state and not is_snake_alive(st.session_state.snake):
-            kill_snake()
-
         for idx, col in enumerate(self.color_columns.columns([1] * MAX_SEGMENTS, vertical_alignment='bottom')):
             with col:
                 if idx == st.session_state.snake_segments:
@@ -152,7 +143,7 @@ class ControlsUI:
                 type='primary',
                 disabled=(st.session_state.session == 'playing') or len(st.session_state.color_warnings),
                 use_container_width=True,
-                on_click=call_all(set_session, create_snake),
+                on_click=create_snake,
                 kwargs={'session': 'playing'}
             )
         with col_give_up:
@@ -161,7 +152,7 @@ class ControlsUI:
                 type='secondary',
                 disabled=(st.session_state.session == 'menu'),
                 use_container_width=True,
-                on_click=call_all(set_session, kill_snake),
+                on_click=kill_snake,
                 kwargs={'session': 'menu'},
             )
 
