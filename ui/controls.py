@@ -95,7 +95,7 @@ class ControlsUI:
 
         self.placeholders_ready = True
 
-    @st.fragment(run_every=TICK_RATE / 4)
+    @st.fragment(run_every=1)
     def render(self):
         self.init_placeholders()
         self.color_instructions.caption('Pick the color for your snake')

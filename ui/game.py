@@ -1,8 +1,6 @@
 import base64
 import io
-import os
 import random
-import tempfile
 
 import numpy as np
 import streamlit as st
@@ -11,7 +9,7 @@ from PIL import Image
 
 from state import TICK_RATE, Direction, submit_move
 
-MAX_RENDER_RATE = TICK_RATE * 2
+MAX_RENDER_RATE = TICK_RATE
 PERIOD = 1.0 / float(MAX_RENDER_RATE)
 DIRECTION_TO_KEYS = {
     Direction.UP: ['ArrowUp', 'W'],

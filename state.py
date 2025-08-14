@@ -229,7 +229,7 @@ def render_food(foods: Iterable[Food], canvas: NDArray[np.uint8] = None) -> NDAr
     return canvas
 
 
-TICK_RATE = 12  # N per second
+TICK_RATE = 8  # N per second
 LAST_RENDER = time()
 LAST_FRAME: np.ndarray = render_snakes([])
 OBSERVED_FRAME_RATE = 0.0  # frames per second
