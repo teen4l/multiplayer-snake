@@ -1,16 +1,11 @@
-import base64
-import io
 import random
 
-import numpy as np
 import streamlit as st
 import streamlit_hotkeys as hotkeys
-from PIL import Image
-from cachetools.func import ttl_cache
 
-from state import TICK_RATE, Direction, submit_move
+from state import Direction, submit_move
 
-MAX_RENDER_RATE = TICK_RATE
+MAX_RENDER_RATE = 20  # keep it snappy
 PERIOD = 1.0 / float(MAX_RENDER_RATE)
 DIRECTION_TO_KEYS = {
     Direction.UP: ['ArrowUp', 'W'],
@@ -19,13 +14,42 @@ DIRECTION_TO_KEYS = {
     Direction.RIGHT: ['ArrowRight', 'D']
 }
 
-@ttl_cache(ttl=PERIOD)
+
+# module-level cache: scale -> {"html": str, "last_checked": float}
+_FRAME_CACHE = {}
+
 def get_frame(frame_scale: int = 6):
-    # import here to refresh on each render
-    from state import LAST_FRAME
-    frame = np.repeat(LAST_FRAME, frame_scale, axis=0)
-    frame = np.repeat(frame, frame_scale, axis=1)
-    return frame
+    """
+    Return a cached <img> unless state.LAST_RENDER advanced since we last checked.
+    """
+    from state import LAST_FRAME, LAST_RENDER  # LAST_RENDER: float timestamp (monotonic)
+    cache = _FRAME_CACHE.get(frame_scale)
+    last_checked = cache["last_checked"] if cache else float("-inf")
+
+    # Re-render only if there's a newer frame
+    if cache is None or LAST_RENDER > last_checked:
+        import io, base64
+        import numpy as np
+        from PIL import Image
+
+        frame = LAST_FRAME
+        if frame.dtype != np.uint8:
+            frame = np.clip(frame, 0, 255).astype(np.uint8)
+
+        buf = io.BytesIO()
+        Image.fromarray(frame).save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
+        # scale width by integer factor; keep pixels crisp
+        width_px = int(frame.shape[1] * frame_scale)
+        style = f'style="width:{width_px}px; image-rendering: pixelated;"'
+        html = f'<img src="data:image/png;base64,{b64}" {style}>'
+
+        _FRAME_CACHE[frame_scale] = {"html": html, "last_checked": float(LAST_RENDER)}
+        return html
+
+    # No new render since the last check -> serve cached HTML
+    return cache["html"]
 
 
 @st.fragment  # isolate hotkeys to avoid unnecessary re-render
@@ -41,21 +65,6 @@ def init_hotkeys() -> None:
             ))
 
     hotkeys.activate(hotkeys_list, key='game-hotkeys')
-
-
-def show_frame(container, frame_np, width=None):
-    # ensure proper dtype
-    if frame_np.dtype != np.uint8:
-        frame_np = np.clip(frame_np, 0, 255).astype(np.uint8)
-    # encode PNG -> base64
-    buf = io.BytesIO()
-    Image.fromarray(frame_np).save(buf, format="PNG")
-    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-    style = f' style="width:{width}px;"' if width else ""
-    container.markdown(
-        f'<img src="data:image/png;base64,{b64}"{style}>',
-        unsafe_allow_html=True,
-    )
 
 
 class GameUI:
@@ -103,7 +112,7 @@ class GameUI:
             help=f'Frame rate is limited by the server and Streamlit capabilities. Target frame rate: {TICK_RATE}'
         )
 
-        show_frame(self.game_screen, get_frame(st.session_state.frame_scale))
+        self.game_screen.markdown(get_frame(st.session_state.frame_scale), unsafe_allow_html=True)
 
     @classmethod
     def init(cls):
