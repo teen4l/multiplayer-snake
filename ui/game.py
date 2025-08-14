@@ -19,7 +19,7 @@ DIRECTION_TO_KEYS = {
     Direction.RIGHT: ['ArrowRight', 'D']
 }
 
-@ttl_cache(ttl=PERIOD)  # use resource caching to avoid copy with data caching
+@ttl_cache(ttl=PERIOD * 2)
 def get_frame(frame_scale: int = 6):
     # import here to refresh on each render
     from state import LAST_FRAME
