@@ -10,7 +10,7 @@ from cachetools.func import ttl_cache
 
 from state import TICK_RATE, Direction, submit_move
 
-MAX_RENDER_RATE = TICK_RATE * 2
+MAX_RENDER_RATE = TICK_RATE
 PERIOD = 1.0 / float(MAX_RENDER_RATE)
 DIRECTION_TO_KEYS = {
     Direction.UP: ['ArrowUp', 'W'],
@@ -19,7 +19,7 @@ DIRECTION_TO_KEYS = {
     Direction.RIGHT: ['ArrowRight', 'D']
 }
 
-@ttl_cache(ttl=PERIOD * 2)
+@ttl_cache(ttl=PERIOD)
 def get_frame(frame_scale: int = 6):
     # import here to refresh on each render
     from state import LAST_FRAME
