@@ -1,15 +1,17 @@
 import base64
 import io
 import random
+from functools import lru_cache
 
 import numpy as np
 import streamlit as st
 import streamlit_hotkeys as hotkeys
 from PIL import Image
+from cachetools.func import ttl_cache
 
 from state import TICK_RATE, Direction, submit_move
 
-MAX_RENDER_RATE = TICK_RATE
+MAX_RENDER_RATE = TICK_RATE * 2
 PERIOD = 1.0 / float(MAX_RENDER_RATE)
 DIRECTION_TO_KEYS = {
     Direction.UP: ['ArrowUp', 'W'],
@@ -17,6 +19,14 @@ DIRECTION_TO_KEYS = {
     Direction.LEFT: ['ArrowLeft', 'A'],
     Direction.RIGHT: ['ArrowRight', 'D']
 }
+
+@ttl_cache(ttl=PERIOD)  # use resource caching to avoid copy with data caching
+def get_frame(frame_scale: int = 6):
+    # import here to refresh on each render
+    from state import LAST_FRAME
+    frame = np.repeat(LAST_FRAME, frame_scale, axis=0)
+    frame = np.repeat(frame, frame_scale, axis=1)
+    return frame
 
 
 @st.fragment  # isolate hotkeys to avoid unnecessary re-render
@@ -94,11 +104,7 @@ class GameUI:
             help=f'Frame rate is limited by the server and Streamlit capabilities. Target frame rate: {TICK_RATE}'
         )
 
-        frame_scale = st.session_state.frame_scale
-        frame = np.repeat(LAST_FRAME, frame_scale, axis=0)
-        frame = np.repeat(frame, frame_scale, axis=1)
-
-        show_frame(self.game_screen, frame)
+        show_frame(self.game_screen, get_frame(st.session_state.frame_scale))
 
     @classmethod
     def init(cls):
