@@ -93,7 +93,7 @@ class GameUI:
     @st.fragment(run_every=PERIOD)
     def render(self):
         # import here to refresh on each render
-        from state import ACTIVE_SNAKES, LAST_FRAME, OBSERVED_FRAME_RATE, TICK_RATE
+        from state import ACTIVE_SNAKES, OBSERVED_FRAME_RATE, TICK_RATE
 
         self.init_placeholders()
 
