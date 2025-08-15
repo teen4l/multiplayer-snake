@@ -160,6 +160,6 @@ class ControlsUI:
 
     @classmethod
     def init(cls):
-        if 'controls_ui' in st.session_state:
-            return st.session_state.controls_ui
-        return cls()
+        if 'controls_ui' not in st.session_state:
+            st.session_state.controls_ui = cls()
+        return st.session_state.controls_ui

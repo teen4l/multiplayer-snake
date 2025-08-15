@@ -116,6 +116,6 @@ class GameUI:
 
     @classmethod
     def init(cls):
-        if 'game_ui' in st.session_state:
-            return st.session_state.game_ui
-        return cls()
+        if 'game_ui' not in st.session_state:
+            st.session_state.game_ui = cls()
+        return st.session_state.game_ui
