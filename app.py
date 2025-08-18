@@ -43,26 +43,30 @@ webrtc_streamer(
     video_html_attrs=VideoHTMLAttributes(autoPlay=True, controls=False, style={"width": "100%"})
 )
 
-hotkeys_list = [hotkeys.hk('restart', 'R', help='Restart the game')]
+@st.fragment()
+def isolate_hotkeys():
+    hotkeys_list = [hotkeys.hk('restart', 'R', help='Restart the game')]
 
-for direction, keys in DIRECTION_TO_KEYS.items():
-    for key in keys:
-        hotkeys_list.append(hotkeys.hk(
-            str(direction), key,
-            ignore_repeat=False,
-            help=f'Move {direction.name.lower()}',
-            prevent_default=True
-        ))
+    for direction, keys in DIRECTION_TO_KEYS.items():
+        for key in keys:
+            hotkeys_list.append(hotkeys.hk(
+                str(direction), key,
+                ignore_repeat=False,
+                help=f'Move {direction.name.lower()}',
+                prevent_default=True
+            ))
 
-hotkeys.activate(hotkeys_list, key='hotkeys')
-hotkeys.on_pressed('restart', restart_game, key='hotkeys')
+    hotkeys.activate(hotkeys_list, key='hotkeys')
+    hotkeys.on_pressed('restart', restart_game, key='hotkeys')
 
-# collect all key events to move the snake
-moves = []
-for direction in DIRECTION_TO_KEYS:
-    if hotkeys.pressed(str(direction), key='hotkeys'):
-        moves.append(direction)
+    # collect all key events to move the snake
+    moves = []
+    for direction in DIRECTION_TO_KEYS:
+        if hotkeys.pressed(str(direction), key='hotkeys'):
+            moves.append(direction)
 
-if 'snake' in st.session_state and st.session_state.session == 'playing' and len(moves):
-    # in case multiple keys are pressed simultaneously
-    submit_move(st.session_state.snake, Direction(random.choice(moves)))
+    if 'snake' in st.session_state and st.session_state.session == 'playing' and len(moves):
+        # in case multiple keys are pressed simultaneously
+        submit_move(st.session_state.snake, Direction(random.choice(moves)))
+
+isolate_hotkeys()
