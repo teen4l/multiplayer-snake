@@ -7,9 +7,12 @@ from enum import StrEnum, auto, Enum
 from itertools import cycle, count
 from typing import Iterable
 
+import av
+import cv2
 import numpy as np
 import streamlit as st
 from numpy._typing import NDArray  # noqa
+from streamlit_webrtc import create_video_source_track
 
 from utils.color import theme_primary_rgb
 
@@ -284,11 +287,12 @@ def finalize_alpha(frame: NDArray[np.uint8]) -> None:
     frame[..., 3] = np.where(alpha_mask, 255, 0).astype(np.uint8)
 
 
-TICK_RATE = 8  # Hz
+TICK_RATE = 12  # Hz
 
 # Published frame/timestamp; the thread will overwrite these.
 LAST_RENDER: float = time.time()  # wall clock
 LAST_FRAME: np.ndarray = np.zeros((BOARD_H, BOARD_W, 4), dtype=np.uint8)
+FRAME_LOCK = threading.RLock()
 OBSERVED_FRAME_RATE: float = 0.0  # EMA of FPS
 
 # ---- Board geometry ----
@@ -324,23 +328,15 @@ def state_lock(func):
 FOOD_LIFESPAN_FRAMES = 128
 FOOD_PER_FRAME = 1
 
-
-class EntityType(StrEnum):
-    FOOD = 'food'
-    SNAKE = 'snake'
+_LAST_ID = 0
 
 
-_LAST_ID = {EntityType.FOOD: 0, EntityType.SNAKE: 0}
-
-
-def _generate_id(e_type: EntityType) -> str:
-    id_ = f'{e_type.value}-{_LAST_ID[e_type]}'
-    _LAST_ID[e_type] += 1
+def _generate_snake_id() -> str:
+    global _LAST_ID
+    id_ = f'snake-{_LAST_ID}'
+    _LAST_ID += 1
     return id_
 
-
-def _get_id_type(id_: str) -> EntityType:
-    return EntityType(id_.split('-')[0])
 
 
 # ---------- Food management (array + OCC) ----------
@@ -754,7 +750,7 @@ def _apply_submit_move(snake_id: str, direction: Direction) -> None:
 def submit_snake(snake: "Snake") -> str:
     """Return ID immediately; worker will add the snake shortly."""
     _ensure_worker()
-    snake_id = _generate_id(EntityType.SNAKE)
+    snake_id = _generate_snake_id()
     _put_job_nowait(Job(kind=JobType.SUBMIT_SNAKE, snake_id=snake_id, snake=snake))
     return snake_id
 
@@ -840,9 +836,11 @@ def run_rendering_thread():
             render_food_arrays_into(food_flats, food_rgbs, write_frame)
             finalize_alpha(write_frame)
 
-            # ---- Publish by swapping buffers (no copy) ----
-            LAST_FRAME = write_frame
-            LAST_RENDER = now_wall
+            # ---- Publish by snapshot (never mutated after publish) ----
+            pub = write_frame.copy()
+            with FRAME_LOCK:
+                LAST_FRAME = pub
+                LAST_RENDER = now_wall
             use_a = not use_a
 
             # ---- Pace to target tick rate (drift-free) ----
@@ -864,4 +862,40 @@ def run_rendering_thread():
     thread = threading.Thread(target=_loop, name='snake-render', daemon=True)
     thread.start()
     return thread, stop_event
+
+
+def _video_source_callback(*args) -> av.VideoFrame:
+    """Build a frame from the current LAST_FRAME in state at each tick."""
+    from state import LAST_FRAME, FRAME_LOCK  # imported here to always get the latest
+    scale = int(st.session_state.get("frame_scale", 6))
+
+    with FRAME_LOCK:
+        snap = LAST_FRAME
+
+    frame = snap
+    # Ensure uint8 and drop alpha if present
+    if frame.dtype != np.uint8:
+        frame = np.clip(frame, 0, 255).astype(np.uint8, copy=False)
+    if frame.ndim == 3 and frame.shape[2] == 4:
+        frame = frame[:, :, :3]  # RGB from RGBA
+
+    # Convert RGB -> BGR for OpenCV/av 'bgr24'
+    frame_bgr = frame[:, :, ::-1]
+
+    # Pixel-perfect upscale
+    if scale > 1:
+        h, w = frame_bgr.shape[:2]
+        frame_bgr = cv2.resize(
+            frame_bgr,
+            (w * scale, h * scale),
+            interpolation=cv2.INTER_NEAREST,
+        )
+
+    return av.VideoFrame.from_ndarray(frame_bgr, format="bgr24")
+
+
+_WEbrtc_FPS = int(2 * float(TICK_RATE))
+VIDEO_SOURCE_TRACK = create_video_source_track(
+    _video_source_callback, key="video_source_track", fps=_WEbrtc_FPS
+)
 

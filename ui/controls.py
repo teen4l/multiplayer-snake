@@ -45,12 +45,6 @@ def restart_game(*_, **__):
     create_snake()
 
 
-@st.fragment
-def activate_restart_hotkey():
-    hotkeys.activate(hotkeys.hk('restart', 'R', help='Restart the game'), key='controls')
-    hotkeys.on_pressed('restart', restart_game, key='controls')
-
-
 class ControlsUI:
 
     def __init__(self):
@@ -62,9 +56,6 @@ class ControlsUI:
 
         if 'color_warnings' not in st.session_state:
             st.session_state.color_warnings = set()
-
-        if 'frame_scale' not in st.session_state:
-            st.session_state.frame_scale = 6
 
         self.placeholders_ready = False
 
@@ -89,7 +80,6 @@ class ControlsUI:
 
         self.placeholders_ready = True
 
-    @st.fragment(run_every=1)
     def render(self):
         self.init_placeholders()
         self.color_instructions.caption('Pick the color for your snake')
@@ -125,17 +115,6 @@ class ControlsUI:
             self.info_panel.success(':material/check: Your snake is perfect!')
 
         # session controls
-
-        self.frame_scale_slider.slider(
-            min_value=1,
-            max_value=10,
-            key='frame_scale',
-            step=1,
-            label='Gaming screen scale',
-            help='Slide to adjust the scale of the gaming screen',
-            disabled=(st.session_state.session == 'playing'),
-        )
-
         col_join, col_give_up = self.session_buttons_columns.columns([1, 1])
         with col_join:
             st.button(
@@ -157,9 +136,3 @@ class ControlsUI:
             )
 
         self.controls_divider.divider()
-
-    @classmethod
-    def init(cls):
-        if 'controls_ui' not in st.session_state:
-            st.session_state.controls_ui = cls()
-        return st.session_state.controls_ui
