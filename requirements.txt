@@ -1,3 +1,5 @@
+opencv-python
+numpy
 streamlit
 streamlit-hotkeys>=0.6.0
 streamlit-webrtc
