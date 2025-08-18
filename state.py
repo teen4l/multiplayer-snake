@@ -864,20 +864,44 @@ def run_rendering_thread():
     return thread, stop_event
 
 
+# Cached video frame to avoid rebuilding when LAST_RENDER hasn't advanced
+CACHE_LOCK = threading.RLock()
+_CACHED_RENDER_TS: float = -1.0
+_CACHED_SCALE: int = -1
+_CACHED_AVFRAME: av.VideoFrame | None = None
+
+
 def _video_source_callback(*args) -> av.VideoFrame:
-    """Build a frame from the current LAST_FRAME in state at each tick."""
-    from state import LAST_FRAME, FRAME_LOCK  # imported here to always get the latest
+    """
+    Build a frame from the current LAST_FRAME in state, with caching.
+    If the renderer hasn't published a newer frame (LAST_RENDER unchanged),
+    return the previously built av.VideoFrame to skip all conversions.
+    The cache is also invalidated when the pixel scale changes.
+    """
+    global _CACHED_RENDER_TS, _CACHED_SCALE, _CACHED_AVFRAME
+
     scale = int(st.session_state.get("frame_scale", 6))
 
+    # Take a consistent snapshot of the published frame and its timestamp
     with FRAME_LOCK:
         snap = LAST_FRAME
+        render_ts = LAST_RENDER
 
+    # Fast path: reuse cached frame if nothing new was rendered and scale is unchanged
+    with CACHE_LOCK:
+        if (
+            _CACHED_AVFRAME is not None
+            and render_ts <= _CACHED_RENDER_TS
+            and scale == _CACHED_SCALE
+        ):
+            return _CACHED_AVFRAME
+
+    # Otherwise (new render or scale change), rebuild the frame
     frame = snap
-    # Ensure uint8 and drop alpha if present
     if frame.dtype != np.uint8:
         frame = np.clip(frame, 0, 255).astype(np.uint8, copy=False)
     if frame.ndim == 3 and frame.shape[2] == 4:
-        frame = frame[:, :, :3]  # RGB from RGBA
+        frame = frame[:, :, :3]  # drop alpha (RGB)
 
     # Convert RGB -> BGR for OpenCV/av 'bgr24'
     frame_bgr = frame[:, :, ::-1]
@@ -891,7 +915,15 @@ def _video_source_callback(*args) -> av.VideoFrame:
             interpolation=cv2.INTER_NEAREST,
         )
 
-    return av.VideoFrame.from_ndarray(frame_bgr, format="bgr24")
+    avframe = av.VideoFrame.from_ndarray(frame_bgr, format="bgr24")
+
+    # Update cache
+    with CACHE_LOCK:
+        _CACHED_RENDER_TS = render_ts
+        _CACHED_SCALE = scale
+        _CACHED_AVFRAME = avframe
+
+    return avframe
 
 
 _WEbrtc_FPS = int(2 * float(TICK_RATE))
