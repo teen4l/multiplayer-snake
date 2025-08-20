@@ -9,7 +9,7 @@ Check it out on [Streamlit Community Cloud](https://multiplayer-snake.streamlit.
 
 * **Multiplayer**: everyone shares one arena.
 * **Controls**: Arrow keys or WASD (via `streamlit-hotkeys`).
-* **Crisp pixels**: server renders a NumPy frame → PNG, shown with `image-rendering: pixelated`.
+* **Crisp pixels**: server sends clients WebRTC video stream with a game using [streamlit-webrtc](https://github.com/whitphx/streamlit-webrtc).
 * **Fixed tick rate** for consistent gameplay.
 
 ## Quickstart
